@@ -1,0 +1,4 @@
+dados_raw/
+scripts/serve.js
+node_modules/
+*.log
