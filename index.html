@@ -101,6 +101,18 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .panel.active{display:block;animation:fade .2s ease}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
+/* filtros de produto */
+.filtros{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.fsearch{position:relative;flex:1;min-width:220px}
+.fsearch svg{position:absolute;left:14px;top:50%;transform:translateY(-50%)}
+.fsearch input{width:100%;background:var(--card);border:1px solid var(--line);color:var(--txt);
+  font-size:15px;padding:12px 16px 12px 40px;border-radius:12px;outline:none}
+.fsearch input:focus{border-color:var(--acc)}
+.filtros select{background:var(--card);border:1px solid var(--line);color:var(--txt);font-size:15px;
+  padding:12px 16px;border-radius:12px;outline:none;cursor:pointer;min-width:190px}
+.filtros select:focus{border-color:var(--acc)}
+.fcount{color:var(--mut);font-size:13px;font-weight:600;white-space:nowrap}
+
 /* item rows (produtos/marcas) */
 .rows{display:flex;flex-direction:column;gap:10px;margin-bottom:60px}
 .row{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;
@@ -264,13 +276,19 @@ function trendChip(t){
 }
 
 /* ================= modelo ================= */
-let DATA=null, MESES=[], REDES=[];
+let DATA=null, MESES=[], REDES=[], NFECH=12, PARCIAL_IDX=-1, MES_PARCIAL=null;
+const calc = s => s.slice(0,NFECH);            // só os meses fechados (base de cálculo)
 function buildModel(){
   MESES = REDES_RAW.meses;
+  MES_PARCIAL = REDES_RAW.mesParcial || null;
+  // mês atual (parcial) = último do array, se marcado; não entra nos cálculos
+  PARCIAL_IDX = (MES_PARCIAL && MESES[MESES.length-1]===MES_PARCIAL) ? MESES.length-1 : -1;
+  NFECH = (typeof REDES_RAW.mesesFechados==='number') ? REDES_RAW.mesesFechados
+          : (PARCIAL_IDX>=0 ? MESES.length-1 : MESES.length);
   REDES = REDES_RAW.redes.map(r=>{
-    // série da rede = soma dos produtos
+    // série da rede = soma dos produtos (inclui o mês parcial p/ visualização)
     const serie = MESES.map((_,i)=> sum(r.produtos.map(p=>p.serie[i]||0)));
-    const total = sum(serie);
+    const total = sum(calc(serie));            // total só dos meses fechados
     // marcas
     const bm={};
     r.produtos.forEach(p=>{
@@ -278,11 +296,12 @@ function buildModel(){
       if(!bm[k]) bm[k]={marca:k, serie:MESES.map(()=>0)};
       p.serie.forEach((v,i)=> bm[k].serie[i]+= v||0);
     });
-    const marcas = Object.values(bm).map(m=>({...m,total:sum(m.serie),tr:trend(m.serie)}))
+    const marcas = Object.values(bm).map(m=>({...m,total:sum(calc(m.serie)),tr:trend(calc(m.serie))}))
                      .sort((a,b)=>b.total-a.total);
-    const produtos = r.produtos.map(p=>({...p,total:sum(p.serie),tr:trend(p.serie)}))
+    const produtos = r.produtos.map(p=>({...p,total:sum(calc(p.serie)),tr:trend(calc(p.serie))}))
                      .sort((a,b)=>b.total-a.total);
-    return {cod:r.cod, nome:r.nome, serie, total, media:total/MESES.length, tr:trend(serie), produtos, marcas};
+    return {cod:r.cod, nome:r.nome, serie, total, media:total/NFECH, tr:trend(calc(serie)), produtos, marcas,
+            parcialVal: PARCIAL_IDX>=0 ? serie[PARCIAL_IDX] : null};
   }).sort((a,b)=>b.total-a.total);
   document.getElementById('upChip').textContent = 'Atualizado em '+(REDES_RAW.atualizadoEm||'—');
 }
@@ -325,11 +344,13 @@ function barsChart(serie,meses){
   }
   serie.forEach((v,i)=>{
     const bh=(v/mx)*ih, cx=padL+i*bw+bw/2, x=padL+i*bw+bw*0.16, bwr=bw*0.68, y=padT+ih-bh;
-    const last=i>=serie.length-3;
-    bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bwr.toFixed(1)}" height="${bh.toFixed(1)}" rx="4" fill="${last?'#4d7cff':'#33477e'}"><title>${MES_LBL(meses[i])}: ${BRL2.format(v)}</title></rect>`;
+    const parc=(meses[i]===MES_PARCIAL);   // mês atual (parcial)
+    const fill = parc?'#6b72ff':'#33477e';
+    const extra = parc?' fill-opacity="0.6" stroke="#8a93ff" stroke-width="1.4" stroke-dasharray="4 3"':'';
+    bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bwr.toFixed(1)}" height="${bh.toFixed(1)}" rx="4" fill="${fill}"${extra}><title>${MES_LBL(meses[i])}${parc?' (parcial)':''}: ${BRL2.format(v)}</title></rect>`;
     // valor acima da barra
-    vals+=`<text x="${cx.toFixed(1)}" y="${(y-8).toFixed(1)}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#eaf0ff">${shortBRL(v)}</text>`;
-    lbls+=`<text x="${cx.toFixed(1)}" y="${h-padB+22}" text-anchor="middle" font-size="12" fill="#93a2c9">${MES_LBL(meses[i])}</text>`;
+    vals+=`<text x="${cx.toFixed(1)}" y="${(y-8).toFixed(1)}" text-anchor="middle" font-size="12.5" font-weight="700" fill="${parc?'#b9c0ff':'#eaf0ff'}">${shortBRL(v)}</text>`;
+    lbls+=`<text x="${cx.toFixed(1)}" y="${h-padB+22}" text-anchor="middle" font-size="12" fill="${parc?'#8a93ff':'#93a2c9'}" font-weight="${parc?'700':'400'}">${MES_LBL(meses[i])}${parc?' •':''}</text>`;
   });
   return `<svg class="bars" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${grid}${bars}${vals}${lbls}</svg>`;
 }
@@ -349,7 +370,7 @@ function renderHub(filter=''){
         <h3>${r.nome}</h3>
       </div>
       <div class="mm">Média mensal <b>${money(r.media)}</b></div>
-      ${sparkline(r.serie,col)}
+      ${sparkline(calc(r.serie),col)}
       <div style="display:flex;justify-content:space-between;align-items:center">
         ${trendChip(r.tr)}
         <span style="color:var(--mut);font-size:13px">${r.produtos.length} produtos</span>
@@ -372,16 +393,23 @@ function renderHub(filter=''){
 let CUR=null;
 function openRede(cod){
   CUR=REDES.find(r=>r.cod===cod); if(!CUR)return;
+  prodQ=''; prodM='';   // reseta filtros de produto ao trocar de rede
   const pos=REDES.indexOf(CUR)+1;
   document.getElementById('hub').classList.add('hidden');
   document.getElementById('redeView').classList.remove('hidden');
   document.getElementById('rvPos').textContent=`${pos}º lugar na curva · ${CUR.produtos.length} produtos · ${CUR.marcas.length} marcas`;
   document.getElementById('rvName').textContent=CUR.nome;
 
+  const parcialKpi = (PARCIAL_IDX>=0) ? `
+    <div class="kpi" style="border-color:#3a4390;background:#161d3e">
+      <div class="k" style="color:#8a93ff">${MES_LBL(MES_PARCIAL)} · em andamento</div>
+      <div class="v">${money(CUR.parcialVal)}</div>
+      <div style="color:var(--mut2);font-size:11px;margin-top:4px">não entra nos cálculos</div></div>` : '';
   document.getElementById('rvKpis').innerHTML=`
     <div class="kpi"><div class="k">Média mensal</div><div class="v">${money(CUR.media)}</div></div>
     <div class="kpi"><div class="k">Faturamento 12 meses</div><div class="v">${money(CUR.total)}</div></div>
-    <div class="kpi"><div class="k">Tendência (3m x 3m)</div><div class="v small">${trendChip(CUR.tr)}</div></div>`;
+    <div class="kpi"><div class="k">Tendência (3m x 3m)</div><div class="v small">${trendChip(CUR.tr)}</div></div>
+    ${parcialKpi}`;
 
   renderResumo();
   setTab('prod');
@@ -407,10 +435,11 @@ function renderResumo(){
   li+=`<li><span class="dot" style="background:var(--acc)"></span> Marca mais forte: <b style="margin-left:4px">${marcaTop?marcaTop.marca:'—'}</b> — ${marcaTop?money(marcaTop.total):''} em 12 meses ${marcaTop?trendChip(marcaTop.tr):''}</li>`;
   if(subindo.length) li+=`<li><span class="dot" style="background:var(--up)"></span> Em alta: ${subindo.map(p=>`${p.desc} (${p.tr.pct.toFixed(0)}%)`).join(' · ')}</li>`;
   if(quedas.length) li+=`<li><span class="dot" style="background:var(--down)"></span> Atenção — caindo: ${quedas.map(p=>`${p.desc} (${p.tr.pct.toFixed(0)}%)`).join(' · ')}</li>`;
+  if(PARCIAL_IDX>=0) li+=`<li><span class="dot" style="background:#8a93ff"></span> Mês atual (${MES_LBL(MES_PARCIAL)}, em andamento): <b style="margin-left:4px">${money(r.parcialVal)}</b> até agora — só para acompanhar, não entra nos cálculos.</li>`;
 
   document.getElementById('rvResumo').innerHTML=`
     <span class="big">Como está a rede ${r.nome}</span>
-    A rede está ${dirTxt} comparando os <b>últimos 3 meses</b> com os 3 anteriores, com média de <b>${money(r.media)}</b> por mês.
+    A rede está ${dirTxt} comparando os <b>últimos 3 meses fechados</b> com os 3 anteriores, com média de <b>${money(r.media)}</b> por mês.
     O carro-chefe é <b>${topP[0]?topP[0].desc:'—'}</b>${topP[1]?`, seguido de ${topP[1].desc}`:''}.
     <ul>${li}</ul>`;
 }
@@ -425,18 +454,45 @@ function setTab(tab){
   if(tab==='mes') renderMes();
 }
 
+let prodQ='', prodM='';
 function renderProdutos(){
+  const marcas=[...new Set(CUR.produtos.map(p=>p.marca||'—'))].sort();
   const el=document.getElementById('panel-prod');
-  el.innerHTML='<div class="rows">'+CUR.produtos.map((p,i)=>{
+  el.innerHTML=`
+    <div class="filtros">
+      <div class="fsearch">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#93a2c9" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="prodSearch" placeholder="Buscar produto por nome ou código..." value="${prodQ.replace(/"/g,'&quot;')}">
+      </div>
+      <select id="prodMarca">
+        <option value="">Todas as marcas</option>
+        ${marcas.map(m=>`<option value="${m}" ${m===prodM?'selected':''}>${m}</option>`).join('')}
+      </select>
+      <span id="prodCount" class="fcount"></span>
+    </div>
+    <div class="rows" id="prodRows"></div>`;
+  const si=document.getElementById('prodSearch');
+  si.addEventListener('input',e=>{prodQ=e.target.value;renderProdRows();});
+  document.getElementById('prodMarca').addEventListener('change',e=>{prodM=e.target.value;renderProdRows();});
+  renderProdRows();
+  if(prodQ){ si.focus(); si.setSelectionRange(si.value.length,si.value.length); }
+}
+function renderProdRows(){
+  const q=prodQ.trim().toLowerCase();
+  const rowsEl=document.getElementById('prodRows');
+  const list=CUR.produtos.filter(p=> (!prodM || (p.marca||'—')===prodM) && (!q || (p.desc+' '+p.cod).toLowerCase().includes(q)));
+  rowsEl.innerHTML = list.length ? list.map(p=>{
+    const ri=CUR.produtos.indexOf(p);
     const col=p.tr?(p.tr.dir==='up'?'#25d366':(p.tr.dir==='down'?'#ff5a5f':'#9aa8cc')):'#9aa8cc';
-    return `<div class="row" onclick="toggleDetail(this,'prod',${i})">
-      <div class="idx">${i+1}</div>
+    return `<div class="row" onclick="toggleDetail(this,'prod',${ri})">
+      <div class="idx">${ri+1}</div>
       <div class="nm">${p.desc}<small>${p.marca||'—'} · cód ${p.cod}</small></div>
-      <div class="mini">${sparkline(p.serie,col)}</div>
+      <div class="mini">${sparkline(calc(p.serie),col)}</div>
       <div class="tr">${trendChip(p.tr)}</div>
       <div class="val">${money(p.total)}<small>12 meses</small></div>
     </div>`;
-  }).join('')+'</div>';
+  }).join('') : '<div class="empty">Nenhum produto encontrado com esse filtro.</div>';
+  document.getElementById('prodCount').textContent = `${list.length} de ${CUR.produtos.length} produtos`;
 }
 function renderMarcas(){
   const el=document.getElementById('panel-marca');
@@ -445,7 +501,7 @@ function renderMarcas(){
     return `<div class="row" onclick="toggleDetail(this,'marca',${i})">
       <div class="idx">${i+1}</div>
       <div class="nm">${m.marca}<small>${CUR.produtos.filter(p=>(p.marca||'—')===m.marca).length} produtos</small></div>
-      <div class="mini">${sparkline(m.serie,col)}</div>
+      <div class="mini">${sparkline(calc(m.serie),col)}</div>
       <div class="tr">${trendChip(m.tr)}</div>
       <div class="val">${money(m.total)}<small>12 meses</small></div>
     </div>`;
@@ -468,11 +524,15 @@ function toggleDetail(rowEl,type,i){
 }
 function renderMes(){
   const el=document.getElementById('panel-mes');
-  const best=MESES[CUR.serie.indexOf(Math.max(...CUR.serie))];
-  const worst=MESES[CUR.serie.indexOf(Math.min(...CUR.serie))];
+  const cs=calc(CUR.serie);   // só meses fechados p/ melhor/pior
+  const best=MESES[cs.indexOf(Math.max(...cs))];
+  const worst=MESES[cs.indexOf(Math.min(...cs))];
+  const nota = PARCIAL_IDX>=0
+    ? `<div class="cs">${NFECH} meses fechados + <b style="color:#8a93ff">${MES_LBL(MES_PARCIAL)} • em andamento</b> (barra tracejada, não entra nos cálculos) · melhor mês: ${MES_LBL(best)} · pior mês: ${MES_LBL(worst)}</div>`
+    : `<div class="cs">Últimos ${MESES.length} meses · melhor mês: ${MES_LBL(best)} · pior mês: ${MES_LBL(worst)}</div>`;
   el.innerHTML=`<div class="chartbox">
     <h4>Faturamento por mês — ${CUR.nome}</h4>
-    <div class="cs">Últimos ${MESES.length} meses · melhor mês: ${MES_LBL(best)} · pior mês: ${MES_LBL(worst)}</div>
+    ${nota}
     ${barsChart(CUR.serie,MESES)}
   </div>`;
 }
@@ -480,20 +540,25 @@ function renderMes(){
 /* ================= EXPORT XLSX (planilha visual e completa) ================= */
 function exportRedeXlsx(){
   if(!CUR) return;
-  const r=CUR, pos=REDES.indexOf(r)+1, NC=17;
+  const r=CUR, pos=REDES.indexOf(r)+1, nMes=MESES.length, NC=nMes+5, filler=3;
   const brl = v => (Math.round(v||0)).toLocaleString('pt-BR');
   const trTxt = t => !t?'—':(t.dir==='up'?'▲ +':(t.dir==='down'?'▼ ':'▬ '))+t.pct.toFixed(0)+'%';
   const trCol = t => !t?'#555':(t.dir==='up'?'#1f9d55':(t.dir==='down'?'#d6324a':'#7a7a7a'));
-  const H='background:#2B2FA8;color:#fff;font-weight:bold;border:1px solid #26325a;padding:6px 8px;';
   const SEC='background:#2B2FA8;color:#fff;font-weight:bold;font-size:14px;border:1px solid #1c2a6b;padding:8px;';
   const CH='background:#dfe3f5;color:#16182e;font-weight:bold;border:1px solid #b9c0dd;padding:5px 7px;text-align:center;';
+  const CHP='background:#c9cffb;color:#2a2f80;font-weight:bold;border:1px solid #9aa2e8;padding:5px 7px;text-align:center;'; // header mês parcial
   const CN='mso-number-format:"#,##0";border:1px solid #d5dae8;padding:4px 7px;text-align:right;';
+  const CNP='mso-number-format:"#,##0";border:1px solid #c3c9f0;background:#eef0fd;padding:4px 7px;text-align:right;color:#3a3f90;'; // valor mês parcial
   const CT='border:1px solid #d5dae8;padding:4px 7px;';
   const blank = `<tr><td colspan="${NC}" style="height:6px;border:none"></td></tr>`;
+  const isP = m => m===MES_PARCIAL;
+  const mHead = () => MESES.map(m=>`<td style="${isP(m)?CHP:CH}">${MES_LBL(m)}${isP(m)?' (parc.)':''}</td>`).join('');
+  const mCells = (serie,bg) => MESES.map((m,i)=>`<td style="${isP(m)?CNP:CN}${isP(m)?'':bg}">${brl(serie[i]||0)}</td>`).join('');
 
   let h='';
   h+=`<tr><td colspan="${NC}" style="${SEC}font-size:18px">CURVA REDES ABC — ${r.nome}</td></tr>`;
   h+=`<tr><td colspan="${NC}" style="${CT}background:#eef1fb">${pos}º lugar na curva · ${r.produtos.length} produtos · ${r.marcas.length} marcas · período ${MES_LBL(MESES[0])} a ${MES_LBL(MESES[MESES.length-1])} · valores em R$</td></tr>`;
+  if(PARCIAL_IDX>=0) h+=`<tr><td colspan="${NC}" style="${CT}background:#eef0fd;color:#3a3f90;font-weight:bold">Cálculos (média, total 12m e tendência) usam apenas os 12 meses fechados. A coluna "${MES_LBL(MES_PARCIAL)} (parc.)" é o mês em andamento — só para acompanhar, não entra nos totais.</td></tr>`;
   h+=blank;
   // resumo
   const dir = r.tr?(r.tr.dir==='up'?'Crescendo':(r.tr.dir==='down'?'Caindo':'Estável')):'—';
@@ -510,28 +575,28 @@ function exportRedeXlsx(){
   h+=blank;
   // evolução mensal da rede
   h+=`<tr><td colspan="${NC}" style="${SEC}">EVOLUÇÃO MENSAL DA REDE (R$)</td></tr>`;
-  h+=`<tr><td style="${CH}text-align:left">Mês</td>${MESES.map(m=>`<td style="${CH}">${MES_LBL(m)}</td>`).join('')}<td style="${CH}">Total</td>`+`<td colspan="${NC-14}" style="border:none"></td></tr>`;
-  h+=`<tr><td style="${CT}font-weight:bold">Faturamento</td>${r.serie.map(v=>`<td style="${CN}">${brl(v)}</td>`).join('')}<td style="${CN}font-weight:bold">${brl(r.total)}</td>`+`<td colspan="${NC-14}" style="border:none"></td></tr>`;
+  h+=`<tr><td style="${CH}text-align:left">Mês</td>${mHead()}<td style="${CH}">Total 12m</td>`+`<td colspan="${filler}" style="border:none"></td></tr>`;
+  h+=`<tr><td style="${CT}font-weight:bold">Faturamento</td>${mCells(r.serie,'')}<td style="${CN}font-weight:bold">${brl(r.total)}</td>`+`<td colspan="${filler}" style="border:none"></td></tr>`;
   h+=blank;
   // produtos
   h+=`<tr><td colspan="${NC}" style="${SEC}">PRODUTOS (${r.produtos.length}) — R$ por mês</td></tr>`;
-  h+=`<tr><td style="${CH}">#</td><td style="${CH}text-align:left">Produto</td><td style="${CH}">Marca</td>${MESES.map(m=>`<td style="${CH}">${MES_LBL(m)}</td>`).join('')}<td style="${CH}">Total 12m</td><td style="${CH}">Tendência</td></tr>`;
+  h+=`<tr><td style="${CH}">#</td><td style="${CH}text-align:left">Produto</td><td style="${CH}">Marca</td>${mHead()}<td style="${CH}">Total 12m</td><td style="${CH}">Tendência</td></tr>`;
   r.produtos.forEach((p,i)=>{
     const bg=i%2?'background:#f4f6fd;':'';
     h+=`<tr><td style="${CN}${bg}">${i+1}</td><td style="${CT}${bg}">${p.desc}</td><td style="${CT}${bg}text-align:center">${p.marca||'—'}</td>`
-      +p.serie.map(v=>`<td style="${CN}${bg}">${brl(v)}</td>`).join('')
+      +mCells(p.serie,bg)
       +`<td style="${CN}${bg}font-weight:bold">${brl(p.total)}</td>`
       +`<td style="${CT}${bg}color:${trCol(p.tr)};font-weight:bold;text-align:center">${trTxt(p.tr)}</td></tr>`;
   });
   h+=blank;
   // marcas
   h+=`<tr><td colspan="${NC}" style="${SEC}">MARCAS (${r.marcas.length}) — R$ por mês</td></tr>`;
-  h+=`<tr><td style="${CH}">#</td><td style="${CH}text-align:left">Marca</td><td style="${CH}">Produtos</td>${MESES.map(m=>`<td style="${CH}">${MES_LBL(m)}</td>`).join('')}<td style="${CH}">Total 12m</td><td style="${CH}">Tendência</td></tr>`;
+  h+=`<tr><td style="${CH}">#</td><td style="${CH}text-align:left">Marca</td><td style="${CH}">Produtos</td>${mHead()}<td style="${CH}">Total 12m</td><td style="${CH}">Tendência</td></tr>`;
   r.marcas.forEach((m,i)=>{
     const bg=i%2?'background:#f4f6fd;':'';
     const nprod=r.produtos.filter(p=>(p.marca||'—')===m.marca).length;
     h+=`<tr><td style="${CN}${bg}">${i+1}</td><td style="${CT}${bg}font-weight:bold">${m.marca}</td><td style="${CN}${bg}">${nprod}</td>`
-      +m.serie.map(v=>`<td style="${CN}${bg}">${brl(v)}</td>`).join('')
+      +mCells(m.serie,bg)
       +`<td style="${CN}${bg}font-weight:bold">${brl(m.total)}</td>`
       +`<td style="${CT}${bg}color:${trCol(m.tr)};font-weight:bold;text-align:center">${trTxt(m.tr)}</td></tr>`;
   });

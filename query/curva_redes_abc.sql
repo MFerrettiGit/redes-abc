@@ -9,14 +9,17 @@
      - Cadastros SA1010 / ACY010 -> FILIAL = ''  (vazio)
      - Produto  SB1010 / SBM010  -> FILIAL = '01'
      - Movimento SC5010 / SC6010 -> FILIAL = '01'
-   Janela: 12 MESES FECHADOS (exclui o mes corrente parcial).
-     Ex.: rodando em jul/2026 => jul/2025 ate jun/2026.
+   Janela: 12 MESES FECHADOS + o MES ATUAL (parcial).
+     Ex.: rodando em 24/jul/2026 => jul/2025 ate 24/jul/2026 (13 meses).
+     Os 12 fechados (jul/2025..jun/2026) sao a base de CALCULO no site;
+     o mes atual (jul/2026) vem so para VISUALIZACAO (nao entra nas
+     medias, totais nem tendencias - o site separa via mesParcial).
    Exclui o grupo guarda-chuva "SEM GRUPO OU REDE" (nao e rede real).
    ===================================================================== */
 
 DECLARE @MesAtual DATE  = DATEFROMPARTS(YEAR(GETDATE()), MONTH(GETDATE()), 1);
 DECLARE @IniDate  DATE  = DATEADD(MONTH, -12, @MesAtual);   -- 1o dia, 12 meses atras
-DECLARE @FimDate  DATE  = DATEADD(DAY,  -1,  @MesAtual);    -- ultimo dia do mes anterior
+DECLARE @FimDate  DATE  = CAST(GETDATE() AS DATE);          -- HOJE (inclui o mes atual parcial)
 DECLARE @DataIni  CHAR(8) = CONVERT(CHAR(8), @IniDate, 112);
 DECLARE @DataFim  CHAR(8) = CONVERT(CHAR(8), @FimDate, 112);
 

@@ -77,8 +77,12 @@ for($i=1;$i -lt $rowsData.Count;$i++){
   $pm[$am]+=$val
 }
 
-# janela de meses (os N mais recentes presentes)
-$meses=@($mesesSet) | Sort-Object | Select-Object -Last $MesesJanela
+# Janela deterministica: 12 meses FECHADOS + o mes ATUAL (parcial) = 13 meses.
+$hoje=[datetime]::Today
+$primeiroMes=(Get-Date -Year $hoje.Year -Month $hoje.Month -Day 1).AddMonths(-12)
+$meses=@(); for($i=0;$i -lt 13;$i++){ $meses+=$primeiroMes.AddMonths($i).ToString('yyyy-MM') }
+$mesParcial=(Get-Date -Year $hoje.Year -Month $hoje.Month -Day 1).ToString('yyyy-MM')
+$mesesFechados=12
 
 # ---------- monta objeto ----------
 $redesArr=@()
@@ -99,6 +103,8 @@ foreach($rc in $redes.Keys){
 $obj=[pscustomobject]@{
   atualizadoEm=(Get-Date -Format 'dd/MM/yyyy HH:mm')
   meses=$meses
+  mesParcial=$mesParcial
+  mesesFechados=$mesesFechados
   redes=$redesArr
 }
 $json=$obj | ConvertTo-Json -Depth 8 -Compress
