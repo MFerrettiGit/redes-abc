@@ -260,12 +260,19 @@ function sparkline(serie,color){
     <path d="${d}" fill="none" stroke="${color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
   </svg>`;
 }
+/* valor compacto p/ rótulo em cima da barra: R$ 1,2M / R$ 80k / R$ 320 */
+function shortBRL(v){
+  v=v||0;
+  if(v>=1e6) return 'R$ '+(v/1e6).toLocaleString('pt-BR',{maximumFractionDigits:v>=1e7?0:1})+'M';
+  if(v>=1e3) return 'R$ '+Math.round(v/1e3).toLocaleString('pt-BR')+'k';
+  return 'R$ '+Math.round(v).toLocaleString('pt-BR');
+}
 function barsChart(serie,meses){
-  const w=1000,h=380,padL=70,padB=46,padT=20,padR=16;
+  const w=1000,h=390,padL=70,padB=46,padT=40,padR=16;
   const mx=Math.max(...serie,1);
   const iw=w-padL-padR, ih=h-padT-padB;
   const bw=iw/serie.length;
-  let bars='',lbls='';
+  let bars='',lbls='',vals='';
   // gridlines
   let grid='';
   for(let g=0;g<=4;g++){
@@ -274,12 +281,14 @@ function barsChart(serie,meses){
     grid+=`<text x="${padL-10}" y="${y+4}" text-anchor="end" font-size="12" fill="#93a2c9">${money(val)}</text>`;
   }
   serie.forEach((v,i)=>{
-    const bh=(v/mx)*ih, x=padL+i*bw+bw*0.16, bwr=bw*0.68, y=padT+ih-bh;
+    const bh=(v/mx)*ih, cx=padL+i*bw+bw/2, x=padL+i*bw+bw*0.16, bwr=bw*0.68, y=padT+ih-bh;
     const last=i>=serie.length-3;
     bars+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bwr.toFixed(1)}" height="${bh.toFixed(1)}" rx="4" fill="${last?'#4d7cff':'#33477e'}"><title>${MES_LBL(meses[i])}: ${BRL2.format(v)}</title></rect>`;
-    lbls+=`<text x="${(padL+i*bw+bw/2).toFixed(1)}" y="${h-padB+22}" text-anchor="middle" font-size="12" fill="#93a2c9">${MES_LBL(meses[i])}</text>`;
+    // valor acima da barra
+    vals+=`<text x="${cx.toFixed(1)}" y="${(y-8).toFixed(1)}" text-anchor="middle" font-size="12.5" font-weight="700" fill="#eaf0ff">${shortBRL(v)}</text>`;
+    lbls+=`<text x="${cx.toFixed(1)}" y="${h-padB+22}" text-anchor="middle" font-size="12" fill="#93a2c9">${MES_LBL(meses[i])}</text>`;
   });
-  return `<svg class="bars" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${grid}${bars}${lbls}</svg>`;
+  return `<svg class="bars" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${grid}${bars}${vals}${lbls}</svg>`;
 }
 
 /* ================= HUB ================= */
