@@ -136,11 +136,50 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   .row .tr{grid-column:2/-1;justify-self:start}
   .rede-card .rank{font-size:48px}
 }
+
+/* ===== GATE (acesso restrito) ===== */
+#gate{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:radial-gradient(1000px 600px at 50% -10%,#16204a 0%,var(--bg) 60%)}
+#gate.hidden{display:none}
+.gate-card{background:linear-gradient(160deg,var(--card),var(--bg2));border:1px solid var(--line);border-radius:22px;
+  padding:44px 38px;max-width:400px;width:100%;text-align:center;box-shadow:0 40px 90px rgba(0,0,0,.55)}
+.gate-card img{height:34px;margin-bottom:24px}
+.gate-card h2{font-size:24px;font-weight:800}
+.gate-card .lock{font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--acc2);
+  background:#4d7cff1a;padding:5px 12px;border-radius:999px;display:inline-block;margin:14px 0 6px}
+.gate-card p{color:var(--mut);font-size:14px;margin-bottom:22px}
+#gatePass{width:100%;padding:14px 16px;background:var(--bg);border:2px solid var(--line);border-radius:13px;
+  font-size:16px;color:var(--txt);text-align:center;letter-spacing:2px;outline:none}
+#gatePass:focus{border-color:var(--acc)}
+#gatePass::placeholder{letter-spacing:0}
+#gateBtn{margin-top:12px;width:100%;padding:14px;border-radius:13px;background:var(--acc);color:#fff;font-weight:800;font-size:16px}
+#gateBtn:hover{background:var(--acc2)}
+#gateErr{color:var(--down);font-size:13px;margin-top:12px;min-height:16px;font-weight:700}
+.gate-hint{color:var(--mut2);font-size:12px;margin-top:16px}
+
+/* botão exportar */
+.xlsx-btn{background:#12351f;border:1px solid #1f6b3a;color:#7cf0a6;border-radius:12px;padding:11px 16px;
+  font-weight:800;font-size:14px;display:flex;align-items:center;gap:8px}
+.xlsx-btn:hover{background:#164226;border-color:#25d366}
 </style>
 </head>
 <body>
 
-<div class="wrap">
+<!-- ===== GATE (acesso só gestão) ===== -->
+<div id="gate">
+  <div class="gate-card">
+    <img src="logo-ferretti.png" alt="Ferretti" onerror="this.style.display='none'">
+    <div class="lock">🔒 Área restrita</div>
+    <h2>Curva Redes ABC</h2>
+    <p>Acesso exclusivo da gestão. Digite sua senha.</p>
+    <input id="gatePass" type="password" placeholder="senha" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button id="gateBtn">Entrar</button>
+    <div id="gateErr"></div>
+    <div class="gate-hint">Use a mesma senha do Hub Ferretti.</div>
+  </div>
+</div>
+
+<div class="wrap" id="appWrap" style="display:none">
   <div class="top">
     <img class="logo" src="logo-ferretti.png" alt="Ferretti" onerror="this.style.display='none'">
     <div>
@@ -178,6 +217,10 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
         <div class="pos" id="rvPos"></div>
         <h2 id="rvName"></h2>
       </div>
+      <button class="xlsx-btn" onclick="exportRedeXlsx()" title="Baixar planilha completa desta rede">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        Baixar Excel
+      </button>
     </div>
 
     <div class="kpis" id="rvKpis"></div>
@@ -434,10 +477,140 @@ function renderMes(){
   </div>`;
 }
 
-/* ================= init ================= */
-buildModel();
-renderHub();
-document.getElementById('q').addEventListener('input',e=>renderHub(e.target.value));
+/* ================= EXPORT XLSX (planilha visual e completa) ================= */
+function exportRedeXlsx(){
+  if(!CUR) return;
+  const r=CUR, pos=REDES.indexOf(r)+1, NC=17;
+  const brl = v => (Math.round(v||0)).toLocaleString('pt-BR');
+  const trTxt = t => !t?'—':(t.dir==='up'?'▲ +':(t.dir==='down'?'▼ ':'▬ '))+t.pct.toFixed(0)+'%';
+  const trCol = t => !t?'#555':(t.dir==='up'?'#1f9d55':(t.dir==='down'?'#d6324a':'#7a7a7a'));
+  const H='background:#2B2FA8;color:#fff;font-weight:bold;border:1px solid #26325a;padding:6px 8px;';
+  const SEC='background:#2B2FA8;color:#fff;font-weight:bold;font-size:14px;border:1px solid #1c2a6b;padding:8px;';
+  const CH='background:#dfe3f5;color:#16182e;font-weight:bold;border:1px solid #b9c0dd;padding:5px 7px;text-align:center;';
+  const CN='mso-number-format:"#,##0";border:1px solid #d5dae8;padding:4px 7px;text-align:right;';
+  const CT='border:1px solid #d5dae8;padding:4px 7px;';
+  const blank = `<tr><td colspan="${NC}" style="height:6px;border:none"></td></tr>`;
+
+  let h='';
+  h+=`<tr><td colspan="${NC}" style="${SEC}font-size:18px">CURVA REDES ABC — ${r.nome}</td></tr>`;
+  h+=`<tr><td colspan="${NC}" style="${CT}background:#eef1fb">${pos}º lugar na curva · ${r.produtos.length} produtos · ${r.marcas.length} marcas · período ${MES_LBL(MESES[0])} a ${MES_LBL(MESES[MESES.length-1])} · valores em R$</td></tr>`;
+  h+=blank;
+  // resumo
+  const dir = r.tr?(r.tr.dir==='up'?'Crescendo':(r.tr.dir==='down'?'Caindo':'Estável')):'—';
+  h+=`<tr>
+    <td colspan="5" style="${CH}text-align:left">Média mensal</td>
+    <td colspan="4" style="${CH}text-align:left">Faturamento 12 meses</td>
+    <td colspan="4" style="${CH}text-align:left">Tendência (3m x 3m)</td>
+    <td colspan="4" style="${CH}text-align:left">Situação</td></tr>`;
+  h+=`<tr>
+    <td colspan="5" style="${CN}text-align:left">R$ ${brl(r.media)}</td>
+    <td colspan="4" style="${CN}text-align:left">R$ ${brl(r.total)}</td>
+    <td colspan="4" style="${CT}color:${trCol(r.tr)};font-weight:bold">${trTxt(r.tr)}</td>
+    <td colspan="4" style="${CT}color:${trCol(r.tr)};font-weight:bold">${dir}</td></tr>`;
+  h+=blank;
+  // evolução mensal da rede
+  h+=`<tr><td colspan="${NC}" style="${SEC}">EVOLUÇÃO MENSAL DA REDE (R$)</td></tr>`;
+  h+=`<tr><td style="${CH}text-align:left">Mês</td>${MESES.map(m=>`<td style="${CH}">${MES_LBL(m)}</td>`).join('')}<td style="${CH}">Total</td>`+`<td colspan="${NC-14}" style="border:none"></td></tr>`;
+  h+=`<tr><td style="${CT}font-weight:bold">Faturamento</td>${r.serie.map(v=>`<td style="${CN}">${brl(v)}</td>`).join('')}<td style="${CN}font-weight:bold">${brl(r.total)}</td>`+`<td colspan="${NC-14}" style="border:none"></td></tr>`;
+  h+=blank;
+  // produtos
+  h+=`<tr><td colspan="${NC}" style="${SEC}">PRODUTOS (${r.produtos.length}) — R$ por mês</td></tr>`;
+  h+=`<tr><td style="${CH}">#</td><td style="${CH}text-align:left">Produto</td><td style="${CH}">Marca</td>${MESES.map(m=>`<td style="${CH}">${MES_LBL(m)}</td>`).join('')}<td style="${CH}">Total 12m</td><td style="${CH}">Tendência</td></tr>`;
+  r.produtos.forEach((p,i)=>{
+    const bg=i%2?'background:#f4f6fd;':'';
+    h+=`<tr><td style="${CN}${bg}">${i+1}</td><td style="${CT}${bg}">${p.desc}</td><td style="${CT}${bg}text-align:center">${p.marca||'—'}</td>`
+      +p.serie.map(v=>`<td style="${CN}${bg}">${brl(v)}</td>`).join('')
+      +`<td style="${CN}${bg}font-weight:bold">${brl(p.total)}</td>`
+      +`<td style="${CT}${bg}color:${trCol(p.tr)};font-weight:bold;text-align:center">${trTxt(p.tr)}</td></tr>`;
+  });
+  h+=blank;
+  // marcas
+  h+=`<tr><td colspan="${NC}" style="${SEC}">MARCAS (${r.marcas.length}) — R$ por mês</td></tr>`;
+  h+=`<tr><td style="${CH}">#</td><td style="${CH}text-align:left">Marca</td><td style="${CH}">Produtos</td>${MESES.map(m=>`<td style="${CH}">${MES_LBL(m)}</td>`).join('')}<td style="${CH}">Total 12m</td><td style="${CH}">Tendência</td></tr>`;
+  r.marcas.forEach((m,i)=>{
+    const bg=i%2?'background:#f4f6fd;':'';
+    const nprod=r.produtos.filter(p=>(p.marca||'—')===m.marca).length;
+    h+=`<tr><td style="${CN}${bg}">${i+1}</td><td style="${CT}${bg}font-weight:bold">${m.marca}</td><td style="${CN}${bg}">${nprod}</td>`
+      +m.serie.map(v=>`<td style="${CN}${bg}">${brl(v)}</td>`).join('')
+      +`<td style="${CN}${bg}font-weight:bold">${brl(m.total)}</td>`
+      +`<td style="${CT}${bg}color:${trCol(m.tr)};font-weight:bold;text-align:center">${trTxt(m.tr)}</td></tr>`;
+  });
+
+  const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+  <head><meta charset="utf-8">
+  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+  <x:Name>${r.nome.slice(0,28)}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+  </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+  <style>td{font-family:Calibri,Arial,sans-serif;font-size:11px;vertical-align:middle}</style></head>
+  <body><table border="0" cellspacing="0">${h}</table></body></html>`;
+
+  const blob=new Blob(['﻿'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const a=document.createElement('a');
+  const slug=r.nome.replace(/[^\wÀ-ÿ]+/g,'_').replace(/^_|_$/g,'');
+  a.href=URL.createObjectURL(blob);
+  a.download=`Curva_Redes_${slug}.xls`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+}
+
+/* ================= GATE (acesso só gestão) ================= */
+/* Hashes SHA-256 (senha minúscula) dos 5 gestores — mesmos do Hub Ferretti */
+const GESTORES = [
+  {h:"15f54d41cbfe598bd87f5109489c4f435db816e9e5ea1d14f335aa742671786b", nome:"Gil"},
+  {h:"a4f55b36371b2ab32db9278b6d593df4157c2ea7b5b50c32a5eac40b94afe582", nome:"Guilherme"},
+  {h:"8f21a995f2b3c950e6ebb59612a0edb6b534a4ea41a1c602393a5417e0a25876", nome:"Marcio"},
+  {h:"6a88e91d86f376c4692a3f0cbb4d98fc910d89375bee43e569b450000e362327", nome:"Paulo"},
+  {h:"f6cebde0a8a3a1cf6b24725a398e833c4493be02894e91c7fb658b1d5d0e315f", nome:"Marcelo"},
+  {h:"4f8e6e70b40a293f8cb6c183b20adbca7769d9b423c6fb1f28716b24923be82d", nome:"Marcelo"},
+];
+const GHASHES = GESTORES.map(g=>g.h);
+async function sha256(str){
+  const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+let STARTED=false;
+function startApp(){
+  if(STARTED) return; STARTED=true;
+  buildModel(); renderHub();
+  document.getElementById('q').addEventListener('input',e=>renderHub(e.target.value));
+}
+function reveal(){
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('appWrap').style.display='';
+  startApp();
+}
+async function tryAuth(){
+  const pw=(document.getElementById('gatePass').value||'').trim().toLowerCase();
+  if(!pw) return;
+  const h=await sha256(pw);
+  if(GHASHES.includes(h)){
+    try{
+      const g=GESTORES.find(x=>x.h===h);
+      localStorage.setItem('ferretti_hub_session',JSON.stringify({h,nome:g.nome,escopo:'todos',fin:false,ts:Date.now()}));
+      localStorage.setItem('ferretti-campanha-acc',h);
+      localStorage.setItem('rel-acc',JSON.stringify({h,escopo:'todos',valor:'',label:g.nome}));
+    }catch(e){}
+    reveal();
+  }else{
+    document.getElementById('gateErr').textContent='Senha sem permissão para esta área.';
+    document.getElementById('gatePass').select();
+  }
+}
+document.getElementById('gateBtn').onclick=tryAuth;
+document.getElementById('gatePass').addEventListener('keydown',e=>{if(e.key==='Enter')tryAuth();});
+document.getElementById('gatePass').focus();
+
+/* auto-login: só entra se a sessão salva for de um gestor (escopo todos) */
+(function autoLogin(){
+  try{
+    let h=null;
+    const s=localStorage.getItem('ferretti_hub_session');
+    if(s){ const o=JSON.parse(s); if(o&&o.h) h=o.h; }
+    if(!h) h=localStorage.getItem('ferretti-campanha-acc');
+    if(!h){ const r=localStorage.getItem('rel-acc'); if(r){ const o=JSON.parse(r); if(o&&o.h) h=o.h; } }
+    if(h && GHASHES.includes(h)) reveal();
+  }catch(e){}
+})();
 </script>
 </body>
 </html>
